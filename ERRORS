@@ -1,0 +1,8 @@
+ERROR: [1] bootstrap checks failed es01 | [1]: max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]
+
+РЕШЕНИЕ:: 
+ОБЯЗАТЕЛЬНО НА ХОСТОВОЙ МАШИНЕ А НЕ В КОНТЕЙНЕРЕ 
+
+sudo sysctl -w vm.max_map_count=262144
+sudo echo "vm.max_map_count=262144" >> /etc/sysctl.conf
+sudo systemctl restart systemd-sysctl.service 

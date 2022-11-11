@@ -1,0 +1,8 @@
+Простой запуск Elastic одиночной ноды 
+
+docker run -d --name elasticsearch -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" elasticsearch:7.17.7
+
+
+ElasticHG
+Basic Authentication: If you did not enter in the security credentials in the connection URL, HQ will fail to connect. The proper format is 
+http://USERNAME:PASSWORD@DOMAIN:PORT
