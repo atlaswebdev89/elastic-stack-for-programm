@@ -6,3 +6,7 @@ docker run -d --name elasticsearch -p 9200:9200 -p 9300:9300 -e "discovery.type=
 ElasticHG
 Basic Authentication: If you did not enter in the security credentials in the connection URL, HQ will fail to connect. The proper format is 
 http://USERNAME:PASSWORD@DOMAIN:PORT
+
+Open Ports
+    logstash: 5044 и 5045
+    nginx loadbalance: 514/514 udp, 5146/5146 udp

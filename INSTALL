@@ -25,6 +25,7 @@ docker-compose up -d --build
 4. Необходимо пароль от kibana_system добавить в файл kibana/kibana.yml и запустить команду 
 docker-compose up -d --build
 
+5. Создать пользователя в elastic (logstash, pass: logstash!$25);
 
 Дополнительные материалы смотри в файле GUIDE
 Типичные ошибки в файле ERRORS
