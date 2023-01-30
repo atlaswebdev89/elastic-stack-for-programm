@@ -9,16 +9,20 @@ sudo systemctl restart systemd-sysctl.service
 А также установить expect 
 sudo apt install expect
 
-1. После скачивания файлов с github необходимо запустить скрипт в папке 
-./start/init-ca-cert.sh 
+Ручная установка 
+
+1. После скачивания файлов с github необходимо запустить скрипт через sudo в папке start 
+cd start/
+sudo ./init-ca-cert.sh 
 
 Этот скрипт создаст корневой сертификат в папке ca-stack-cluster необходимый для настройка безопасности между узлами класстера
 
 2. Далее запускаем сборку и разворачивание контейнеров 
 docker-compose up -d --build
 
-3. После запуска cluster необходимо запустить скрипт получения паролей
-./get-password/get-password.sh
+3. После запуска cluster необходимо запустить скрипт получения паролей из папки get-password/
+cd get-password/
+./get-password.sh
 
 После удачного выполнения появиться папка  elastic-stack-password в которой будет файл get-password.txt 
 
@@ -29,3 +33,12 @@ docker-compose up -d --build
 
 Дополнительные материалы смотри в файле GUIDE
 Типичные ошибки в файле ERRORS
+
+Полуавтоматическая установка 
+1. Запустить скрипт
+sudo ./start.sh
+2. Необходимо пароль от kibana_system добавить в файл kibana/kibana.yml и запустить команду 
+docker-compose up -d --build
+3. Создать пользователя в elastic (logstash, pass: logstash!$25);
+
+Везде где просит указывать Y

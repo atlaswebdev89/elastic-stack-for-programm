@@ -4,13 +4,15 @@
 
 # Скрипт будет создавать корневой сертификат для настройки шифрование между узлами elastic в кластере.
 # Настройка минимальной безопасности!!
-
-cd ../
+cd ..
 path=${PWD}/ca-stack-cluster;
+
 
 if [[ -d ${path} ]]
 then
     rm -R ${path}
+else 
+    mkdir ${path}
 fi
 
 docker run  --rm -e "discovery.type=single-node" \
