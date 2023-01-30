@@ -42,12 +42,12 @@ if [[ -f "get-password.sh" ]]
 then
 	./get-password.sh $elastic
 	count=0
-	while  [[ ! -d ${path}/elastic-stack-passwords/  ]] && [[ ${count} -lt 3 ]]
+	while  [[ ! -d ${path}/elastic-stack-passwords/  ]] && [[ ${count} -lt 5 ]]
 		do
 				((count++))
 				echo "Case number ${count}"
 				./get-password.sh $elastic
-				sleep 10;
+				sleep 15;
 		done
 	cd ${path}
 else 
