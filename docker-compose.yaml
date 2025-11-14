@@ -22,10 +22,12 @@ services:
             - ${PROXY_NGINX_LOGSTASH}:5146
             - ${PROXY_NGINX_LOGSTASH}:5146/udp
             - ${PROXY_NGINX_LOGSTASH_BEATS}:5147
+            - ${PROXY_NGINX_ELASTIC}:9200
         volumes:
             - ./nginx/nginx-logstash/nginx.conf:/etc/nginx/nginx.conf:ro
-            - ./nginx/nginx-logstash/mod-proxy-syslog.conf:/etc/nginx/logstash-proxy/mod-proxy-syslog.conf:ro
-            # Без этого не работает. Возможно в будущем надо будет пересоздать образ. Создать Dockerfile с этими файлами 
+            - ./nginx/nginx-logstash/stream-proxy.conf:/etc/nginx/stream-proxy/stream-proxy.conf:ro
+            - ./nginx/nginx-logstash/http-proxy.conf:/etc/nginx/http-proxy/http-proxy.conf:ro
+            # Без этого не работает. Возможно в будущем надо будет пересоздать образ. Создать Dockerfile с этими файлами
             # чтоб не засорять docker-compose
             - ./nginx/nginx-logstash/logstash-connect.log:/var/log/nginx/logstash/logstash-connect.log
             - ./nginx/nginx-logstash/logstash-error.log:/var/log/nginx/logstash/logstash-error.log
