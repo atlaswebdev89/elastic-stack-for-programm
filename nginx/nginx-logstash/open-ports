@@ -1,0 +1,3 @@
+514 (tcp, udp) - для syslog 	-> 5145 logstash
+5146 (tcp, udp) 				-> 5146 logstash
+5147 (beats)					-> 5147 logstash

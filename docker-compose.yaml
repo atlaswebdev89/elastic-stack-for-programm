@@ -1,5 +1,4 @@
-version: '3.8'
-
+name: ${NAME_PROJECT}
 networks:
     elastic:
         driver: bridge
@@ -18,10 +17,11 @@ services:
         hostname: nginx-proxy-logstash
         restart: unless-stopped
         ports:
-            - "514:514"
-            - "514:514/udp"
-            - "5146:5146"
-            - "5146:5146/udp"
+            - ${PROXY_NGINX_SYSLOG}:514
+            - ${PROXY_NGINX_SYSLOG}:514/udp
+            - ${PROXY_NGINX_LOGSTASH}:5146
+            - ${PROXY_NGINX_LOGSTASH}:5146/udp
+            - ${PROXY_NGINX_LOGSTASH_BEATS}:5147
         volumes:
             - ./nginx/nginx-logstash/nginx.conf:/etc/nginx/nginx.conf:ro
             - ./nginx/nginx-logstash/mod-proxy-syslog.conf:/etc/nginx/logstash-proxy/mod-proxy-syslog.conf:ro
@@ -31,29 +31,30 @@ services:
             - ./nginx/nginx-logstash/logstash-error.log:/var/log/nginx/logstash/logstash-error.log
         networks:
           - elastic
-        logging:
-            driver: "fluentd"
-            options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+        healthcheck:
+            test: nginx -t 2>/dev/null || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 10
 
-     # Настройка для балансировки запросов к kinaba
+    # Настройка для балансировки запросов к kinaba
     web-proxy-kibana:
         image: nginx:latest
         container_name: nginx-proxy-kibana
         hostname: nginx-proxy-kibana
         restart: unless-stopped
         ports:
-            - "${PROXY_NGINX_KIBANA_PORT}:80"
+            - ${PROXY_NGINX_KIBANA_PORT}:80
         volumes:
             - ./nginx/nginx-kibana/kibana.conf:/etc/nginx/templates/default.conf.template
         networks:
             - elastic
-        logging:
-            driver: "fluentd"
-            options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+        healthcheck:
+            test: curl -sS localhost:80 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
     
     # Настройка для Logstash (server 1)
     elastic-logstash-node-1:
@@ -66,16 +67,19 @@ services:
         restart: unless-stopped
         networks:
             - elastic
-        ports:
-            - "5044:5044"
-            - "5044:5044/udp"
         depends_on:
             - web-proxy-logstash
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:9600/" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
         logging:
-            driver: "fluentd"
+            driver: "json-file"
             options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+                max-size: "10m"
+                max-file: "3"
     
     # Настройка для Logstash (server 2)
     elastic-logstash-node-2:
@@ -86,18 +90,21 @@ services:
         container_name: logstash-two
         hostname: logstash-two
         restart: unless-stopped
-        ports:
-            - "5045:5044"
-            - "5045:5044/udp"
         networks:
             - elastic
         depends_on:
             - web-proxy-logstash
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:9600/" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
         logging:
-            driver: "fluentd"
+            driver: "json-file"
             options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+                max-size: "10m"
+                max-file: "3"
 
     # Настройка kibana node 1
     elastic-kibana-node-1:
@@ -117,11 +124,11 @@ services:
             - elastic-node-2
             - elastic-node-3
             - elastic-node-4
-        logging:
-            driver: "fluentd"
-            options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+        healthcheck:
+            test: curl -sS localhost:5601 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 20
 
     # Настройка kibana node 1
     elastic-kibana-node-2:
@@ -141,11 +148,12 @@ services:
             - elastic-node-2
             - elastic-node-3
             - elastic-node-4
-        logging:
-            driver: "fluentd"
-            options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+        healthcheck:
+            test: curl -sS localhost:5601 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
     # Настройка Elasticsearch
     elastic-node-1:
         build:
@@ -171,19 +179,21 @@ services:
             # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата 
             # необходимо запустить скрипт init-ca-cert.sh в папке start/
             - SECURITY=true
-        ports:
-            - "9200:9200"
-            - "9300:9300"
         volumes:
             - elastic1-data:/usr/share/elasticsearch/data/
             - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
         networks:
             - elastic
+        healthcheck:
+            test: curl -sS localhost:9200 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 20
         logging:
-            driver: "fluentd"
+            driver: "json-file"
             options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+                max-size: "10m"
+                max-file: "3"
     
     elastic-node-2:
         build:
@@ -214,11 +224,16 @@ services:
             - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
         networks:
             - elastic
+        healthcheck:
+            test: curl -sS localhost:9200 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 20
         logging:
-            driver: "fluentd"
+            driver: "json-file"
             options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+                max-size: "10m"
+                max-file: "3"
     
     elastic-node-3:
         build:
@@ -249,11 +264,16 @@ services:
             - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
         networks:
             - elastic
+        healthcheck:
+            test: curl -sS localhost:9200 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 20
         logging:
-            driver: "fluentd"
+            driver: "json-file"
             options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+                max-size: "10m"
+                max-file: "3"
     
     elastic-node-4:
         build:
@@ -284,11 +304,16 @@ services:
             - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
         networks:
             - elastic
+        healthcheck:
+            test: curl -sS localhost:9200 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 20
         logging:
-            driver: "fluentd"
+            driver: "json-file"
             options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+                max-size: "10m"
+                max-file: "3"
 
     # Две ноды elastic будет использовать в качестве балансировки нагрузки. Они будут не мастер и не дата. Только распределяют запросы и учавствуют в выборах мастера
     elastic-node-coordination-1:
@@ -319,11 +344,16 @@ services:
             - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
         networks:
             - elastic
+        healthcheck:
+            test: curl -sS localhost:9200 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 20
         logging:
-            driver: "fluentd"
+            driver: "json-file"
             options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+                max-size: "10m"
+                max-file: "3"
 
     elastic-node-coordination-2:
         build:
@@ -353,11 +383,16 @@ services:
             - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
         networks:
             - elastic
+        healthcheck:
+            test: curl -sS localhost:9200 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 20
         logging:
-            driver: "fluentd"
+            driver: "json-file"
             options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+                max-size: "10m"
+                max-file: "3"
 
     cerebro:
         image: lmenezes/cerebro:latest
@@ -368,35 +403,15 @@ services:
             - ${CEREBRO_PORT}:9000
         networks:
             - elastic
+        volumes:
+            - ./cerebro/application.conf:/opt/cerebro/conf/application.conf
         depends_on:
             - elastic-node-1
             - elastic-node-2
             - elastic-node-3
             - elastic-node-4
-        logging:
-            driver: "fluentd"
-            options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"  
-
-    elastichq:
-        image: elastichq/elasticsearch-hq
-        container_name: elastichq
-        hostname: elastichq
-        restart: unless-stopped
-        environment:
-            - "HQ_DEFAULT_URL=http://elastic-node-3:9200"
-        ports:
-            - ${ELASTICHQ_PORT}:5000
-        networks:
-            - elastic
-        depends_on:
-            - elastic-node-1
-            - elastic-node-2
-            - elastic-node-3
-            - elastic-node-4
-        logging:
-            driver: "fluentd"
-            options:
-                fluentd-async-connect: "true" 
-                tag: "docker-{{.Name}}"
+        healthcheck:
+            test: wget --no-verbose --tries=3 --spider localhost:9000 || exit 1
+            interval: 5s
+            timeout: 5s
+            retries: 5

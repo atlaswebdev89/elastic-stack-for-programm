@@ -1,3 +1,3 @@
-FROM logstash:8.4.3
-COPY ./logstash.yml /usr/share/logstash/config/
-COPY ./conf/ /usr/share/logstash/pipeline/
+FROM logstash:8.15.1
+COPY ./config/logstash.yml /usr/share/logstash/config/
+COPY ./pipeline/ /usr/share/logstash/pipeline/

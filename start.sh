@@ -7,7 +7,7 @@ elastic="elastic-node-1"
 # Скрипт настройки и запуска контейнеров ElasticSearch
 
 # Запускаем сборку 
-docker-compose down && docker volume prune
+docker compose down && docker volume prune -f
 
 if [[ -d ${path}/start ]]
 then
@@ -27,7 +27,7 @@ else
 fi
 
 # Запускаем сборку 
-docker-compose up -d --build
+docker compose up -d --build
 sleep 40
 
 if [[ -d ${path}/get-password ]]
@@ -56,5 +56,5 @@ else
 fi
 
 sleep 5;
-docker-compose ps;
+docker compose ps;
 exit 0;
