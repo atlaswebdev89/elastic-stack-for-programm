@@ -1,419 +1,442 @@
 name: ${NAME_PROJECT}
 networks:
-    elastic:
-        driver: bridge
+  elastic:
+    driver: bridge
 
 volumes:
-  elastic2-data: 
+  elastic2-data:
   elastic1-data:
-  elastic3-data:  
+  elastic3-data:
   elastic4-data:
 
 services:
-    # Для балансировки запросов к logstash
-    web-proxy-logstash:
-        image: nginx:latest
-        container_name: nginx-proxy-logstash
-        hostname: nginx-proxy-logstash
-        restart: unless-stopped
-        ports:
-            - ${PROXY_NGINX_SYSLOG}:514
-            - ${PROXY_NGINX_SYSLOG}:514/udp
-            - ${PROXY_NGINX_LOGSTASH}:5146
-            - ${PROXY_NGINX_LOGSTASH}:5146/udp
-            - ${PROXY_NGINX_LOGSTASH_BEATS}:5147
-            - ${PROXY_NGINX_ELASTIC}:9200
-        volumes:
-            - ./nginx/nginx-logstash/nginx.conf:/etc/nginx/nginx.conf:ro
-            - ./nginx/nginx-logstash/stream-proxy.conf:/etc/nginx/stream-proxy/stream-proxy.conf:ro
-            - ./nginx/nginx-logstash/http-proxy.conf:/etc/nginx/http-proxy/http-proxy.conf:ro
-            # Без этого не работает. Возможно в будущем надо будет пересоздать образ. Создать Dockerfile с этими файлами
-            # чтоб не засорять docker-compose
-            - ./nginx/nginx-logstash/logstash-connect.log:/var/log/nginx/logstash/logstash-connect.log
-            - ./nginx/nginx-logstash/logstash-error.log:/var/log/nginx/logstash/logstash-error.log
-        networks:
-          - elastic
-        healthcheck:
-            test: nginx -t 2>/dev/null || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 10
+  # Для балансировки запросов к logstash
+  web-proxy-logstash:
+    image: nginx:latest
+    container_name: nginx-proxy-logstash
+    hostname: nginx-proxy-logstash
+    restart: unless-stopped
+    ports:
+      - ${PROXY_NGINX_SYSLOG}:514
+      - ${PROXY_NGINX_SYSLOG}:514/udp
+      - ${PROXY_NGINX_LOGSTASH}:5146
+      - ${PROXY_NGINX_LOGSTASH}:5146/udp
+      - ${PROXY_NGINX_LOGSTASH_BEATS}:5147
+      - ${PROXY_NGINX_ELASTIC}:9200
+      - ${PROXY_NGINX_NETFLOW}:2055/udp
+    volumes:
+      - ./nginx/nginx-logstash/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx-logstash/stream-proxy.conf:/etc/nginx/stream-proxy/stream-proxy.conf:ro
+      - ./nginx/nginx-logstash/http-proxy.conf:/etc/nginx/http-proxy/http-proxy.conf:ro
+      # Без этого не работает. Возможно в будущем надо будет пересоздать образ. Создать Dockerfile с этими файлами
+      # чтоб не засорять docker-compose
+      - ./nginx/nginx-logstash/logstash-connect.log:/var/log/nginx/logstash/logstash-connect.log
+      - ./nginx/nginx-logstash/logstash-error.log:/var/log/nginx/logstash/logstash-error.log
+    networks:
+      - elastic
+    depends_on:
+      - elastic-logstash-node-1
+      - elastic-logstash-node-2
+      - elastic-node-coordination-1
+      - elastic-node-coordination-2
+    healthcheck:
+      test: nginx -t 2>/dev/null || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-    # Настройка для балансировки запросов к kinaba
-    web-proxy-kibana:
-        image: nginx:latest
-        container_name: nginx-proxy-kibana
-        hostname: nginx-proxy-kibana
-        restart: unless-stopped
-        ports:
-            - ${PROXY_NGINX_KIBANA_PORT}:80
-        volumes:
-            - ./nginx/nginx-kibana/kibana.conf:/etc/nginx/templates/default.conf.template
-        networks:
-            - elastic
-        healthcheck:
-            test: curl -sS localhost:80 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 20
+  # Настройка для балансировки запросов к kinaba
+  web-proxy-kibana:
+    image: nginx:latest
+    container_name: nginx-proxy-kibana
+    hostname: nginx-proxy-kibana
+    restart: unless-stopped
+    ports:
+      - ${PROXY_NGINX_KIBANA_PORT}:80
+    volumes:
+      - ./nginx/nginx-kibana/kibana.conf:/etc/nginx/templates/default.conf.template
+    networks:
+      - elastic
+    depends_on:
+      - elastic-kibana-node-1
+      - elastic-kibana-node-2
+    healthcheck:
+      test: curl -sS localhost:80 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
-    
-    # Настройка для Logstash (server 1)
-    elastic-logstash-node-1:
-        build:
-            context: logstash/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: logstash-one
-        hostname: logstash-one
-        restart: unless-stopped
-        networks:
-            - elastic
-        depends_on:
-            - web-proxy-logstash
-        healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:9600/" ]
-            interval: 30s
-            timeout: 10s
-            retries: 3
-            start_period: 40s
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "10m"
-                max-file: "3"
-    
-    # Настройка для Logstash (server 2)
-    elastic-logstash-node-2:
-        build:
-            context: logstash/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: logstash-two
-        hostname: logstash-two
-        restart: unless-stopped
-        networks:
-            - elastic
-        depends_on:
-            - web-proxy-logstash
-        healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:9600/" ]
-            interval: 30s
-            timeout: 10s
-            retries: 3
-            start_period: 40s
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "10m"
-                max-file: "3"
 
-    # Настройка kibana node 1
-    elastic-kibana-node-1:
-        build:
-            context: kibana/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: kibana-one
-        hostname: kibana-one
-        restart: unless-stopped
-        environment:
-            - SECURITY=true
-        networks:
-            - elastic
-        depends_on:
-            - elastic-node-1
-            - elastic-node-2
-            - elastic-node-3
-            - elastic-node-4
-        healthcheck:
-            test: curl -sS localhost:5601 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 20
+  # Настройка для Logstash (server 1)
+  elastic-logstash-node-1:
+    build:
+      context: logstash/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: logstash-one
+    hostname: logstash-one
+    restart: unless-stopped
+    networks:
+      - elastic
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9600/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-    # Настройка kibana node 1
-    elastic-kibana-node-2:
-        build:
-            context: kibana/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: kibana-two
-        hostname: kibana-two
-        restart: unless-stopped
-        environment:
-            - SECURITY=true
-        networks:
-            - elastic
-        depends_on:
-            - elastic-node-1
-            - elastic-node-2
-            - elastic-node-3
-            - elastic-node-4
-        healthcheck:
-            test: curl -sS localhost:5601 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 20
+  # Настройка для Logstash (server 2)
+  elastic-logstash-node-2:
+    build:
+      context: logstash/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: logstash-two
+    hostname: logstash-two
+    restart: unless-stopped
+    networks:
+      - elastic
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9600/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-    # Настройка Elasticsearch
-    elastic-node-1:
-        build:
-            context: elastic-node-1/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: elastic-node-1
-        hostname: elastic-node-1
-        restart: unless-stopped
-        # Без этого не работает при дериктиве bootstrap.memory_lock=true
-        ulimits:
-            memlock:
-                soft: -1
-                hard: -1
-        environment:
-             # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
-            - bootstrap.memory_lock=true
-            # Для одиночного хоста, не в cluster
-            # - discovery.type=single-node
-            - TZ=${TZ}
-            # Ограничение размера кучи
-            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-            # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата 
-            # необходимо запустить скрипт init-ca-cert.sh в папке start/
-            - SECURITY=true
-        volumes:
-            - elastic1-data:/usr/share/elasticsearch/data/
-            - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
-        networks:
-            - elastic
-        healthcheck:
-            test: curl -sS localhost:9200 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 20
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "10m"
-                max-file: "3"
-    
-    elastic-node-2:
-        build:
-            context: elastic-node-2/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: elastic-node-2
-        hostname: elastic-node-2
-        restart: unless-stopped
-        # Без этого не работает при дериктиве bootstrap.memory_lock=true
-        ulimits:
-            memlock:
-                soft: -1
-                hard: -1
-        environment:
-             # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
-            - bootstrap.memory_lock=true
-            # Для одиночного хоста, не в cluster
-            # - discovery.type=single-node
-            - TZ=${TZ}
-            # Ограничение размера кучи
-            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-            # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата 
-            # необходимо запустить скрипт init-ca-cert.sh в папке start/
-            - SECURITY=true
-        volumes:
-            - elastic2-data:/usr/share/elasticsearch/data/
-            - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
-        networks:
-            - elastic
-        healthcheck:
-            test: curl -sS localhost:9200 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 20
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "10m"
-                max-file: "3"
-    
-    elastic-node-3:
-        build:
-            context: elastic-node-3/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: elastic-node-3
-        hostname: elastic-node-3
-        restart: unless-stopped
-        # Без этого не работает при дериктиве bootstrap.memory_lock=true
-        ulimits:
-            memlock:
-                soft: -1
-                hard: -1
-        environment:
-             # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
-            - bootstrap.memory_lock=true
-            # Для одиночного хоста, не в cluster
-            # - discovery.type=single-node
-            - TZ=${TZ}
-            # Ограничение размера кучи
-            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-            # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата 
-            # необходимо запустить скрипт init-ca-cert.sh в папке start/
-            - SECURITY=true
-        volumes:
-            - elastic3-data:/usr/share/elasticsearch/data/
-            - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
-        networks:
-            - elastic
-        healthcheck:
-            test: curl -sS localhost:9200 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 20
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "10m"
-                max-file: "3"
-    
-    elastic-node-4:
-        build:
-            context: elastic-node-4/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: elastic-node-4
-        hostname: elastic-node-4
-        restart: unless-stopped
-        # Без этого не работает при дериктиве bootstrap.memory_lock=true
-        ulimits:
-            memlock:
-                soft: -1
-                hard: -1
-        environment:
-             # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
-            - bootstrap.memory_lock=true
-            # Для одиночного хоста, не в cluster
-            # - discovery.type=single-node
-            - TZ=${TZ}
-            # Ограничение размера кучи
-            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-            # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата 
-            # необходимо запустить скрипт init-ca-cert.sh в папке start/
-            - SECURITY=true
-        volumes:
-            - elastic4-data:/usr/share/elasticsearch/data/
-            - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
-        networks:
-            - elastic
-        healthcheck:
-            test: curl -sS localhost:9200 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 20
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "10m"
-                max-file: "3"
+  # Настройка kibana node 1
+  elastic-kibana-node-1:
+    build:
+      context: kibana/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: kibana-one
+    hostname: kibana-one
+    restart: unless-stopped
+    environment:
+      - SECURITY=true
+    networks:
+      - elastic
+    depends_on:
+      - elastic-node-1
+      - elastic-node-2
+      - elastic-node-3
+      - elastic-node-4
+    healthcheck:
+      test: curl -sS localhost:5601 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
-    # Две ноды elastic будет использовать в качестве балансировки нагрузки. Они будут не мастер и не дата. Только распределяют запросы и учавствуют в выборах мастера
-    elastic-node-coordination-1:
-        build:
-            context: elastic-coordination-1/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: elastic-node-coordination-1
-        hostname: elastic-node-coordination-1
-        restart: unless-stopped
-        # Без этого не работает при дериктиве bootstrap.memory_lock=true
-        ulimits:
-            memlock:
-                soft: -1
-                hard: -1
-        environment:
-             # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
-            - bootstrap.memory_lock=true
-            # Для одиночного хоста, не в cluster
-            # - discovery.type=single-node
-            - TZ=${TZ}
-            # Ограничение размера кучи
-            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-            # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата 
-            # необходимо запустить скрипт init-ca-cert.sh в папке start/
-            - SECURITY=true
-        volumes:
-            - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
-        networks:
-            - elastic
-        healthcheck:
-            test: curl -sS localhost:9200 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 20
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "10m"
-                max-file: "3"
+  # Настройка kibana node 1
+  elastic-kibana-node-2:
+    build:
+      context: kibana/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: kibana-two
+    hostname: kibana-two
+    restart: unless-stopped
+    environment:
+      - SECURITY=true
+    networks:
+      - elastic
+    depends_on:
+      - elastic-node-1
+      - elastic-node-2
+      - elastic-node-3
+      - elastic-node-4
+    healthcheck:
+      test: curl -sS localhost:5601 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
-    elastic-node-coordination-2:
-        build:
-            context: elastic-coordination-2/
-            # Имя докерфайла из которого будет собран образ
-            dockerfile: Dockerfile
-        container_name: elastic-node-coordination-2
-        hostname: elastic-node-coordination-2
-        restart: unless-stopped
-        # Без этого не работает при дериктиве bootstrap.memory_lock=true
-        ulimits:
-            memlock:
-                soft: -1
-                hard: -1
-        environment:
-             # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
-            - bootstrap.memory_lock=true
-            # Для одиночного хоста, не в cluster
-            # - discovery.type=single-node
-            - TZ=${TZ}
-            # Ограничение размера кучи
-            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-            # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата 
-            # необходимо запустить скрипт init-ca-cert.sh в папке start/
-            - SECURITY=true
-        volumes:
-            - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
-        networks:
-            - elastic
-        healthcheck:
-            test: curl -sS localhost:9200 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 20
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "10m"
-                max-file: "3"
+  # Настройка Elasticsearch
+  elastic-node-1:
+    build:
+      context: elastic-node-1/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: elastic-node-1
+    hostname: elastic-node-1
+    restart: unless-stopped
+    # Без этого не работает при дериктиве bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    environment:
+      # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
+      - bootstrap.memory_lock=true
+      # Для одиночного хоста, не в cluster
+      # - discovery.type=single-node
+      - TZ=${TZ}
+      # Ограничение размера кучи
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата
+      # необходимо запустить скрипт init-ca-cert.sh в папке start/
+      - SECURITY=true
+    volumes:
+      - elastic1-data:/usr/share/elasticsearch/data/
+      - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
+    networks:
+      - elastic
+    depends_on:
+      - elastic-node-2
+    healthcheck:
+      test: curl -sS localhost:9200 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-    cerebro:
-        image: lmenezes/cerebro:latest
-        container_name: cerebro-elastic
-        hostname: cerebro-elastic
-        restart: unless-stopped
-        ports:
-            - ${CEREBRO_PORT}:9000
-        networks:
-            - elastic
-        volumes:
-            - ./cerebro/application.conf:/opt/cerebro/conf/application.conf
-        depends_on:
-            - elastic-node-1
-            - elastic-node-2
-            - elastic-node-3
-            - elastic-node-4
-        healthcheck:
-            test: wget --no-verbose --tries=3 --spider localhost:9000 || exit 1
-            interval: 5s
-            timeout: 5s
-            retries: 5
+  elastic-node-2:
+    build:
+      context: elastic-node-2/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: elastic-node-2
+    hostname: elastic-node-2
+    restart: unless-stopped
+    # Без этого не работает при дериктиве bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    environment:
+      # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
+      - bootstrap.memory_lock=true
+      # Для одиночного хоста, не в cluster
+      # - discovery.type=single-node
+      - TZ=${TZ}
+      # Ограничение размера кучи
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата
+      # необходимо запустить скрипт init-ca-cert.sh в папке start/
+      - SECURITY=true
+    volumes:
+      - elastic2-data:/usr/share/elasticsearch/data/
+      - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
+    networks:
+      - elastic
+    depends_on:
+      - elastic-node-3
+    healthcheck:
+      test: curl -sS localhost:9200 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  elastic-node-3:
+    build:
+      context: elastic-node-3/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: elastic-node-3
+    hostname: elastic-node-3
+    restart: unless-stopped
+    # Без этого не работает при дериктиве bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    environment:
+      # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
+      - bootstrap.memory_lock=true
+      # Для одиночного хоста, не в cluster
+      # - discovery.type=single-node
+      - TZ=${TZ}
+      # Ограничение размера кучи
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата
+      # необходимо запустить скрипт init-ca-cert.sh в папке start/
+      - SECURITY=true
+    volumes:
+      - elastic3-data:/usr/share/elasticsearch/data/
+      - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
+    networks:
+      - elastic
+    depends_on:
+      - elastic-node-4
+    healthcheck:
+      test: curl -sS localhost:9200 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  elastic-node-4:
+    build:
+      context: elastic-node-4/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: elastic-node-4
+    hostname: elastic-node-4
+    restart: unless-stopped
+    # Без этого не работает при дериктиве bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    environment:
+      # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
+      - bootstrap.memory_lock=true
+      # Для одиночного хоста, не в cluster
+      # - discovery.type=single-node
+      - TZ=${TZ}
+      # Ограничение размера кучи
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата
+      # необходимо запустить скрипт init-ca-cert.sh в папке start/
+      - SECURITY=true
+    volumes:
+      - elastic4-data:/usr/share/elasticsearch/data/
+      - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
+    networks:
+      - elastic
+    healthcheck:
+      test: curl -sS localhost:9200 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Две ноды elastic будет использовать в качестве балансировки нагрузки. Они будут не мастер и не дата. Только распределяют запросы и учавствуют в выборах мастера
+  elastic-node-coordination-1:
+    build:
+      context: elastic-coordination-1/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: elastic-node-coordination-1
+    hostname: elastic-node-coordination-1
+    restart: unless-stopped
+    # Без этого не работает при дериктиве bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    environment:
+      # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
+      - bootstrap.memory_lock=true
+      # Для одиночного хоста, не в cluster
+      # - discovery.type=single-node
+      - TZ=${TZ}
+      # Ограничение размера кучи
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата
+      # необходимо запустить скрипт init-ca-cert.sh в папке start/
+      - SECURITY=true
+    volumes:
+      - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
+    networks:
+      - elastic
+    depends_on:
+      - elastic-node-1
+      - elastic-node-2
+      - elastic-node-3
+      - elastic-node-4
+    healthcheck:
+      test: curl -sS localhost:9200 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  elastic-node-coordination-2:
+    build:
+      context: elastic-coordination-2/
+      # Имя докерфайла из которого будет собран образ
+      dockerfile: Dockerfile
+    container_name: elastic-node-coordination-2
+    hostname: elastic-node-coordination-2
+    restart: unless-stopped
+    # Без этого не работает при дериктиве bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    environment:
+      # Отключить использование файла подкачки. Для elastic не рекомендоуется использовать swapp
+      - bootstrap.memory_lock=true
+      # Для одиночного хоста, не в cluster
+      # - discovery.type=single-node
+      - TZ=${TZ}
+      # Ограничение размера кучи
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Включаем настройку безопасности с применением сертификатов. Для получения корневого сертификата
+      # необходимо запустить скрипт init-ca-cert.sh в папке start/
+      - SECURITY=true
+    volumes:
+      - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
+    networks:
+      - elastic
+    depends_on:
+      - elastic-node-1
+      - elastic-node-2
+      - elastic-node-3
+      - elastic-node-4
+    healthcheck:
+      test: curl -sS localhost:9200 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  cerebro:
+    image: lmenezes/cerebro:latest
+    container_name: cerebro-elastic
+    hostname: cerebro-elastic
+    restart: unless-stopped
+    ports:
+      - ${CEREBRO_PORT}:9000
+    networks:
+      - elastic
+    volumes:
+      - ./cerebro/application.conf:/opt/cerebro/conf/application.conf
+    depends_on:
+      - elastic-node-1
+      - elastic-node-2
+      - elastic-node-3
+      - elastic-node-4
+      - elastic-node-coordination-1
+      - elastic-node-coordination-2
+    healthcheck:
+      test: wget --no-verbose --tries=3 --spider localhost:9000 || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 5
