@@ -1,13 +1,27 @@
+# Общие настройки Filebeat
+name: "filebeat-${HOSTNAME}"
+max_procs: 1
+queue.mem:
+  events: 4096
+  flush.min_events: 512
+  flush.timeout: "5s"
+
 filebeat.config:
   modules:
     path: ${path.config}/modules.d/*.yml
     reload.enabled: false
+  inputs:
+    enabled: true
+    path: ${path.config}/inputs.d/*.yml
+    reload.enabled: true
+    reload.period: 10s
 
 processors:
   - add_cloud_metadata: ~
   - add_docker_metadata: ~
 
-output.elasticsearch:
-  hosts: '${ELASTICSEARCH_HOSTS:elasticsearch:9200}'
-  username: '${ELASTICSEARCH_USERNAME:}'
-  password: '${ELASTICSEARCH_PASSWORD:}'
+output.logstash:
+  # The Logstash hosts
+  hosts: ["e1lastic-logstash-node-1:5044", "elastic-logstash-node-2:5044"]
+  # Без этой директивы балансировка не работает
+  loadbalance: true

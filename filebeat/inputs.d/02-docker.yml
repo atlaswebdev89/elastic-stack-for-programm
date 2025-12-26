@@ -1,0 +1,16 @@
+# Docker Container Logs
+- type: container
+  enabled: true
+  paths:
+    - /var/lib/docker/containers/*/*.log
+  stream: all
+  json.keys_under_root: true
+  json.add_error_key: true
+  processors:
+    - add_docker_metadata:
+        host: "unix:///var/run/docker.sock"
+  fields:
+    log_source: "docker_container"
+    environment: "docker"
+  fields_under_root: true
+  tags: ["docker", "container"]

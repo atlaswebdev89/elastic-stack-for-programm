@@ -30,8 +30,12 @@ services:
       - ./nginx/nginx-logstash/http-proxy.conf:/etc/nginx/http-proxy/http-proxy.conf:ro
       # Без этого не работает. Возможно в будущем надо будет пересоздать образ. Создать Dockerfile с этими файлами
       # чтоб не засорять docker-compose
-      - ./nginx/nginx-logstash/logstash-connect.log:/var/log/nginx/logstash/logstash-connect.log
-      - ./nginx/nginx-logstash/logstash-error.log:/var/log/nginx/logstash/logstash-error.log
+      - ./logs/nginx/logstash/stream/logstash-connect.log:/var/log/nginx/logstash/logstash-connect.log
+      - ./logs/nginx/logstash/stream/logstash-error.log:/var/log/nginx/logstash/logstash-error.log
+      - ./logs/nginx/logstash/stream/beats-error.log:/var/log/nginx/logstash/beats-error.log
+      - ./logs/nginx/logstash/http/access-direct-elastic.log:/var/log/nginx/direct-elastic/access-direct-elastic.log
+      - ./logs/nginx/logstash/http/error-direct-elastic.log:/var/log/nginx/direct-elastic/error-direct-elastic.log
+      
     networks:
       - elastic
     depends_on:
@@ -44,6 +48,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m" # Максимальный размер файла лога
+        max-file: "5"
 
   # Настройка для балансировки запросов к kinaba
   web-proxy-kibana:
@@ -65,7 +74,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m" # Максимальный размер файла лога
+        max-file: "5"
 
   # Настройка для Logstash (server 1)
   elastic-logstash-node-1:
@@ -136,6 +149,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Настройка kibana node 1
   elastic-kibana-node-2:
@@ -160,6 +178,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Настройка Elasticsearch
   elastic-node-1:
@@ -440,3 +463,112 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Для файлов логов
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.0
+    container_name: filebeat
+    hostname: filebeat
+    restart: unless-stopped
+    volumes:
+      # Конфигурация Filebeat
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      # Директории с конфигами
+      - ./filebeat/inputs.d/:/usr/share/filebeat/inputs.d/:ro
+      # - ./filebeat/outputs.d/:/usr/share/filebeat/outputs.d/:ro
+      # - ./filebeat/processors.d/:/usr/share/filebeat/processors.d/:ro
+      # - ./filebeat/config.d/:/usr/share/filebeat/config.d/:ro
+      
+      # Монтируем ВСЮ папку logs
+      - ./logs:/var/log/host_logs:ro
+      
+      # Docker контейнеры лог (опционально)
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - elastic
+    depends_on:
+      - elastic-logstash-node-1
+      - elastic-logstash-node-2
+    healthcheck:
+      test: filebeat test config || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    # Увеличиваем лимиты на количество открытых файлов
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+  
+  # Ротация логов с помощью logrotate
+  logrotate:
+    image: alpine:latest
+    container_name: logrotate
+    restart: unless-stopped
+    volumes:
+      # Монтируем папку с логами
+      - ./logs:/logs:rw
+      # Конфигурация logrotate (опционально)
+      # Пока не используется так как конфиг создается динамически в entrypoint.sh
+      # - ./logrotate/config:/etc/logrotate.d:rw
+      # Entrypoint скрипт
+      - ./logrotate/scripts/entrypoint.sh:/entrypoint.sh:ro
+    environment:
+      # Частота запуска cron (по умолчанию ежедневно в 2:00)
+      - CRON_SCHEDULE=* * * * *
+      # Принудительный запуск при старте
+      - RUN_AT_STARTUP=true
+      # Максимальный размер файла для ротации
+      - MAXSIZE=1M
+      # Количество хранимых версий
+      - ROTATE_COUNT=3
+      # КОличество дней хранения файлов архивов логов
+      - MAXAGE=5
+    # Используем entrypoint скрипт
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    healthcheck:
+      test: ["CMD", "pgrep", "crond"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Для очистки логов
+  # ЗАПУСК
+  # Запуск с параметрами по умолчанию
+  # docker compose run --rm log-cleaner
+  # Без очистки архивов
+  #docker compose run --rm -e DELETE_ARCHIVES=true log-cleaner
+  # Только показ что будет сделано (dry-run)
+  #docker compose run --rm -e CLEAR_LOGS=false log-cleaner
+  log-cleaner:
+    image: alpine:latest
+    container_name: log-cleaner
+    restart: "no"  # Только по ручному запуску
+    volumes:
+      # Монтируем папку с логами
+      - ./logs:/logs:rw
+      # Монтируем скрипты
+      - ./log-cleaner/scripts:/scripts:ro
+    environment:
+      # Параметры по умолчанию
+      - CLEAR_LOGS=true
+      - DELETE_ARCHIVES=false
+    # Используем entrypoint скрипт
+    entrypoint: ["/scripts/entrypoint.sh"]

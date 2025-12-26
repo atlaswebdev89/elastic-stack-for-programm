@@ -1,0 +1,11 @@
+# System Logs (пример)
+- type: filestream
+  id: system-auth
+  enabled: false  # отключено по умолчанию
+  paths:
+    - /var/log/auth.log
+  fields:
+    log_source: "system_auth"
+    log_type: "security"
+  fields_under_root: true
+  tags: ["system", "auth", "security"]

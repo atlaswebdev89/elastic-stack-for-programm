@@ -2,3 +2,5 @@
 5146 (tcp, udp) 				-> 5146 logstash
 5147 (beats)					-> 5147 logstash
 9200 (elastic)					-> 9200 elastic
+5147 (beats)					-> 5147 logstash
+2055 (netflow/udp)					-> 2055 elastic

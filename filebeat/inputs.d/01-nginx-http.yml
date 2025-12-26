@@ -1,0 +1,27 @@
+# NGINX HTTP Proxy Logs
+- type: filestream
+  id: nginx-http-access
+  enabled: true
+  paths:
+    - /var/log/host_logs/nginx/logstash/http/access-direct-elastic.log
+  fields:
+    log_source: "nginx_http_proxy"
+    log_type: "access"
+    component: "http_proxy"
+    service: "elasticsearch"
+  fields_under_root: true
+  tags: ["nginx", "http", "access", "proxy", "elasticsearch"]
+
+- type: filestream
+  id: nginx-http-error
+  enabled: true
+  paths:
+    - /var/log/host_logs/nginx/logstash/http/error-direct-elastic.log
+  fields:
+    log_source: "nginx_http_proxy"
+    log_type: "error"
+    component: "http_proxy"
+    severity: "error"
+    service: "elasticsearch"
+  fields_under_root: true
+  tags: ["nginx", "http", "error", "proxy", "elasticsearch"]
