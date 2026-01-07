@@ -22,6 +22,6 @@ processors:
 
 output.logstash:
   # The Logstash hosts
-  hosts: ["e1lastic-logstash-node-1:5044", "elastic-logstash-node-2:5044"]
+  hosts: ["elastic-logstash-node-1:5147", "elastic-logstash-node-2:5147"]
   # Без этой директивы балансировка не работает
   loadbalance: true

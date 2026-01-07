@@ -9,7 +9,7 @@ if [ $# -gt 0 ]; then
 else
     # Автоматическая очистка по умолчанию
     if [ "${CLEAR_LOGS:-true}" = "true" ]; then
-        /scripts/clear-logs.sh "/logs" "${DELETE_ARCHIVES:-false}"
+        /scripts/clear-logs.sh "/logs"
     else
         echo "CLEAR_LOGS is set to false, skipping automatic cleanup"
     fi

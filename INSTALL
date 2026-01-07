@@ -18,7 +18,7 @@ sudo ./init-ca-cert.sh
 Этот скрипт создаст корневой сертификат в папке ca-stack-cluster необходимый для настройка безопасности между узлами класстера
 
 2. Далее запускаем сборку и разворачивание контейнеров 
-docker-compose up -d --build
+docker compose up -d --build
 
 3. После запуска cluster необходимо запустить скрипт получения паролей из папки get-password/
 cd get-password/
@@ -27,7 +27,7 @@ cd get-password/
 После удачного выполнения появиться папка  elastic-stack-password в которой будет файл get-password.txt 
 
 4. Необходимо пароль от kibana_system добавить в файл kibana/kibana.yml и запустить команду 
-docker-compose up -d --build
+docker compose up -d --build
 
 5. Создать пользователя в elastic (logstash, pass: logstash!$25);
 

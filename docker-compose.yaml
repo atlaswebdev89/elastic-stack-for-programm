@@ -8,6 +8,11 @@ volumes:
   elastic1-data:
   elastic3-data:
   elastic4-data:
+  elastic-coordination1-data:
+  elastic-coordination2-data:
+  kibana_data1:
+  kibana_data2:
+  filebeat-data:
 
 services:
   # Для балансировки запросов к logstash
@@ -48,6 +53,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -74,6 +81,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -91,6 +100,13 @@ services:
     restart: unless-stopped
     networks:
       - elastic
+    depends_on:
+      - elastic-node-1
+      - elastic-node-2
+      - elastic-node-3
+      - elastic-node-4
+      - elastic-node-coordination-1
+      - elastic-node-coordination-2
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9600/" ]
       interval: 30s
@@ -114,12 +130,20 @@ services:
     restart: unless-stopped
     networks:
       - elastic
+    depends_on:
+      - elastic-node-1
+      - elastic-node-2
+      - elastic-node-3
+      - elastic-node-4
+      - elastic-node-coordination-1
+      - elastic-node-coordination-2
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9600/" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
     logging:
       driver: "json-file"
       options:
@@ -137,6 +161,9 @@ services:
     restart: unless-stopped
     environment:
       - SECURITY=true
+    volumes:
+      # Основной volume для сохранения настроек Kibana
+      - kibana_data1:/usr/share/kibana/data
     networks:
       - elastic
     depends_on:
@@ -144,6 +171,8 @@ services:
       - elastic-node-2
       - elastic-node-3
       - elastic-node-4
+    labels:
+      elastic.logs: "true"
     healthcheck:
       test: curl -sS localhost:5601 || exit 1
       interval: 5s
@@ -166,6 +195,9 @@ services:
     restart: unless-stopped
     environment:
       - SECURITY=true
+    volumes:
+      # Основной volume для сохранения настроек Kibana
+      - kibana_data2:/usr/share/kibana/data
     networks:
       - elastic
     depends_on:
@@ -178,6 +210,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -217,10 +251,13 @@ services:
     depends_on:
       - elastic-node-2
     healthcheck:
-      test: curl -sS localhost:9200 || exit 1
+      test: curl -sS localhost:9200 && test -f /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12 || exit 1
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -259,10 +296,13 @@ services:
     depends_on:
       - elastic-node-3
     healthcheck:
-      test: curl -sS localhost:9200 || exit 1
+      test: curl -sS localhost:9200 && test -f /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12 || exit 1
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -301,10 +341,13 @@ services:
     depends_on:
       - elastic-node-4
     healthcheck:
-      test: curl -sS localhost:9200 || exit 1
+      test: curl -sS localhost:9200 && test -f /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12 || exit 1
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -341,10 +384,13 @@ services:
     networks:
       - elastic
     healthcheck:
-      test: curl -sS localhost:9200 || exit 1
+      test: curl -sS localhost:9200 && test -f /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12 || exit 1
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -377,6 +423,7 @@ services:
       # необходимо запустить скрипт init-ca-cert.sh в папке start/
       - SECURITY=true
     volumes:
+      - elastic-coordination1-data:/usr/share/elasticsearch/data/
       - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
     networks:
       - elastic
@@ -386,10 +433,13 @@ services:
       - elastic-node-3
       - elastic-node-4
     healthcheck:
-      test: curl -sS localhost:9200 || exit 1
+      test: curl -sS localhost:9200 && test -f /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12 || exit 1
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -421,6 +471,7 @@ services:
       # необходимо запустить скрипт init-ca-cert.sh в папке start/
       - SECURITY=true
     volumes:
+      - elastic-coordination2-data:/usr/share/elasticsearch/data/
       - ./ca-stack-cluster/:/usr/share/elasticsearch/config/cert/
     networks:
       - elastic
@@ -430,10 +481,13 @@ services:
       - elastic-node-3
       - elastic-node-4
     healthcheck:
-      test: curl -sS localhost:9200 || exit 1
+      test: curl -sS localhost:9200 && test -f /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12 || exit 1
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -463,6 +517,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -471,7 +527,7 @@ services:
 
   # Для файлов логов
   filebeat:
-    image: docker.elastic.co/beats/filebeat:8.11.0
+    image: docker.elastic.co/beats/filebeat:8.16.0
     container_name: filebeat
     hostname: filebeat
     restart: unless-stopped
@@ -486,10 +542,6 @@ services:
       
       # Монтируем ВСЮ папку logs
       - ./logs:/var/log/host_logs:ro
-      
-      # Docker контейнеры лог (опционально)
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - elastic
     depends_on:
@@ -505,12 +557,45 @@ services:
       nofile:
         soft: 65536
         hard: 65536
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-  
+ 
+  filebeat-docker:
+    image: docker.elastic.co/beats/filebeat:8.16.0
+    container_name: filebeat-docker
+    hostname: filebeat-docker
+    restart: unless-stopped
+    user: root
+    command:
+      - filebeat
+      - -e
+      - --strict.perms=false
+    volumes:
+      # Основной конфиг
+      - ./filebeat-docker/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      # Docker container logs
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      # Docker socket (для metadata)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - filebeat-data:/usr/share/filebeat/data
+    networks:
+      - elastic
+    healthcheck:
+      test: filebeat test config --strict.perms=false || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # Ротация логов с помощью logrotate
   logrotate:
     image: alpine:latest
@@ -525,15 +610,15 @@ services:
       # Entrypoint скрипт
       - ./logrotate/scripts/entrypoint.sh:/entrypoint.sh:ro
     environment:
-      # Частота запуска cron (по умолчанию ежедневно в 2:00)
-      - CRON_SCHEDULE=* * * * *
+      # Частота запуска cron (Каждый час)
+      - CRON_SCHEDULE=0 * * * *
       # Принудительный запуск при старте
       - RUN_AT_STARTUP=true
       # Максимальный размер файла для ротации
       - MAXSIZE=100M
       # Количество хранимых версий
       - ROTATE_COUNT=3
-      # КОличество дней хранения файлов архивов логов
+      # Количество дней хранения файлов архивов логов
       - MAXAGE=5
     # Используем entrypoint скрипт
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
@@ -543,6 +628,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    labels:
+      elastic.logs: "true"
     logging:
       driver: "json-file"
       options:
@@ -572,3 +659,5 @@ services:
       - DELETE_ARCHIVES=false
     # Используем entrypoint скрипт
     entrypoint: ["/scripts/entrypoint.sh"]
+    labels:
+      elastic.logs: "true"

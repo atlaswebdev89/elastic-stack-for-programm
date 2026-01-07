@@ -8,9 +8,20 @@ then
 fi
 
 # Настраиваются сертификаты доступа 
-if ! [[ -z ${SECURITY} ]] && [[ ${SECURITY} == "true" ]]
+if ! [[ -z ${SECURITY} ]] && [[ ${SECURITY} == "true" ]] && ! [[ -f /usr/share/elasticsearch/config/elastic-certificates.p12 ]]
 then
-	if [[ -f /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12 ]] && ! [[ -f /usr/share/elasticsearch/config/elastic-certificates.p12 ]]
+
+	# Добавим проверку наличия сертификата. Исключить веротность задержки монтирования volume с сертификатом
+	for i in {1..60}; do
+        if [[ -f /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12  ]]; then
+            echo "CA certificate found"
+            break
+        fi
+        echo "Waiting CA certificate ($i/60)..."
+        sleep 1
+    done
+	
+	if [[ -f /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12 ]]
 	then
 		cp /usr/share/elasticsearch/config/cert/elastic-stack-ca.p12 /usr/share/elasticsearch/config/elastic-stack-ca.p12
 		# создаем сертификат для ноды elastic без пароля. Нечего в keystore добавлять не надо
